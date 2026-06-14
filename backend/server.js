@@ -4,6 +4,7 @@ const express = require('express');
 const cors = require('cors');
 const connectDB = require('./config/db');
 const authRoutes = require('./routes/authRoutes');
+const newsRoutes = require('./routes/newsRoutes');
 const { errorHandler, notFound } = require('./middleware/errorMiddleware');
 
 // Initialize Express application
@@ -27,6 +28,7 @@ app.get('/', (req, res) => {
 
 // API routes
 app.use('/api/auth', authRoutes);
+app.use('/api/news', newsRoutes);
 
 // 404 and global error handlers (must be registered after routes)
 app.use(notFound);
