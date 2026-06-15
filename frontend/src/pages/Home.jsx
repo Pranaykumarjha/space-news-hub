@@ -17,9 +17,12 @@ import {
   Bookmark,
   BookOpen,
   Zap,
-  Info
+  CheckCircle,
+  XCircle,
+  AlertCircle
 } from 'lucide-react';
 import api from '../services/api';
+import { fetchBookmarks, saveBookmark, removeBookmark } from '../services/bookmarkService';
 import Starfield from '../components/Starfield';
 import SkeletonLoader from '../components/SkeletonLoader';
 import AnimatedCounter from '../components/AnimatedCounter';
@@ -37,13 +40,16 @@ const Home = () => {
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [scrollProgress, setScrollProgress] = useState(0);
   
-  // Advanced interactions states
-  const [bookmarkedIds, setBookmarkedIds] = useState([]);
+  // Advanced integrations states
+  const [bookmarks, setBookmarks] = useState([]);
   const [selectedArticle, setSelectedArticle] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [searchFocused, setSearchFocused] = useState(false);
   const [heroCursor, setHeroCursor] = useState({ x: 0, y: 0 });
   const [heroOffset, setHeroOffset] = useState({ x: 0, y: 0 });
+  const [toast, setToast] = useState(null);
+  const [bookmarkLoading, setBookmarkLoading] = useState({}); // { [articleId]: true } while saving
+  const [bookmarkAnimating, setBookmarkAnimating] = useState({}); // { [articleId]: true } for pop anim
 
   // Navigation hook
   const navigate = useNavigate();
@@ -57,14 +63,7 @@ const Home = () => {
     }
 
     fetchNews();
-
-    // Load bookmarked IDs from localStorage
-    try {
-      const saved = JSON.parse(localStorage.getItem('savedArticles') || '[]');
-      setBookmarkedIds(saved);
-    } catch {
-      setBookmarkedIds([]);
-    }
+    loadBookmarks();
 
     // Scroll progress indicator & top FAB triggers
     const handleScroll = () => {
@@ -85,6 +84,16 @@ const Home = () => {
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, [navigate]);
+
+  // Fetch bookmarks from database API
+  const loadBookmarks = async () => {
+    try {
+      const data = await fetchBookmarks();
+      setBookmarks(data);
+    } catch (err) {
+      console.error('Error fetching bookmarks:', err);
+    }
+  };
 
   // Fetch news from API
   const fetchNews = async () => {
@@ -114,23 +123,82 @@ const Home = () => {
     }
   };
 
+  // Trigger feedback toast alerts
+  const showToast = (message, type = 'success') => {
+    setToast({ message, type });
+    setTimeout(() => {
+      setToast(null);
+    }, 3000);
+  };
+
   // Handle logout
   const handleLogout = () => {
     localStorage.removeItem('authToken');
     navigate('/login');
   };
 
-  // Toggle bookmark function (simulation on local state & localStorage)
-  const handleToggleBookmark = (id, e) => {
-    if (e) e.stopPropagation(); // Prevent card clicks
-    let updated;
-    if (bookmarkedIds.includes(id)) {
-      updated = bookmarkedIds.filter(item => item !== id);
+  // Add/Remove bookmark via backend integration (with optimistic UI)
+  const handleToggleBookmark = async (article, e) => {
+    if (e) e.stopPropagation();
+
+    const articleIdStr = String(article.id || article.articleId);
+
+    // Prevent double-click while loading
+    if (bookmarkLoading[articleIdStr]) return;
+
+    const existingBookmark = bookmarks.find(b => String(b.articleId) === articleIdStr);
+
+    // --- Optimistic update: change UI immediately ---
+    if (existingBookmark) {
+      setBookmarks(prev => prev.filter(b => b._id !== existingBookmark._id));
     } else {
-      updated = [...bookmarkedIds, id];
+      // Build a temporary bookmark object for instant visual feedback
+      const optimistic = {
+        _id: `temp_${articleIdStr}`,
+        articleId: articleIdStr,
+        title: article.title,
+        summary: article.summary,
+        image_url: article.image_url,
+        url: article.url,
+        published_at: article.published_at,
+        news_site: article.news_site,
+      };
+      setBookmarks(prev => [optimistic, ...prev]);
     }
-    setBookmarkedIds(updated);
-    localStorage.setItem('savedArticles', JSON.stringify(updated));
+
+    // Trigger pop animation
+    setBookmarkAnimating(prev => ({ ...prev, [articleIdStr]: true }));
+    setTimeout(() => setBookmarkAnimating(prev => ({ ...prev, [articleIdStr]: false })), 500);
+
+    // Mark as loading
+    setBookmarkLoading(prev => ({ ...prev, [articleIdStr]: true }));
+
+    try {
+      if (existingBookmark) {
+        await removeBookmark(existingBookmark._id);
+        showToast('Article Removed from Bookmarks', 'info');
+      } else {
+        const savedData = await saveBookmark(article);
+        // Replace the optimistic entry with the real server record
+        setBookmarks(prev =>
+          prev.map(b =>
+            b._id === `temp_${articleIdStr}` ? savedData : b
+          )
+        );
+        showToast('Article Saved!', 'success');
+      }
+    } catch (err) {
+      // Revert optimistic update on failure
+      if (existingBookmark) {
+        setBookmarks(prev => [existingBookmark, ...prev]);
+      } else {
+        setBookmarks(prev => prev.filter(b => b._id !== `temp_${articleIdStr}`));
+      }
+      const errorMsg = err.response?.data?.message || 'Failed to save bookmark.';
+      showToast(errorMsg, 'error');
+    } finally {
+      setBookmarkLoading(prev => ({ ...prev, [articleIdStr]: false }));
+    }
   };
 
   // Open article modal
@@ -184,7 +252,7 @@ const Home = () => {
     const dy = (y - yc) / yc;
 
     setHeroCursor({ x, y });
-    setHeroOffset({ x: dx * 15, y: dy * 15 }); // Subtle shifting coordinates
+    setHeroOffset({ x: dx * 15, y: dy * 15 });
   };
 
   const handleHeroMouseLeave = () => {
@@ -214,6 +282,9 @@ const Home = () => {
 
   // Statistics properties
   const uniqueSources = new Set(news.map(article => article.news_site).filter(Boolean)).size;
+
+  // Bookmarked check array for highlights
+  const bookmarkedIds = bookmarks.map(b => String(b.articleId));
 
   // Animation variants
   const staggerContainer = {
@@ -269,6 +340,12 @@ const Home = () => {
               <Rocket size={18} className="rocket-icon" />
             </div>
             <span className="logo-brand-text">Space News Hub</span>
+          </div>
+
+          {/* Navigation Links */}
+          <div className="nav-links">
+            <span className="nav-link active" onClick={scrollToTop}>Dashboard</span>
+            <span className="nav-link" onClick={() => navigate('/bookmarks')}>Bookmarks</span>
           </div>
 
           <button onClick={handleLogout} className="glass-logout-btn">
@@ -387,7 +464,7 @@ const Home = () => {
               <div className="telemetry-info">
                 <span className="telemetry-label">SAVED SIGNALS</span>
                 <span className="telemetry-value">
-                  {loading ? '...' : <AnimatedCounter value={bookmarkedIds.length} />}
+                  {loading ? '...' : <AnimatedCounter value={bookmarks.length} />}
                 </span>
               </div>
             </div>
@@ -409,7 +486,7 @@ const Home = () => {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onFocus={() => setSearchFocused(true)}
-                onBlur={() => setTimeout(() => setSearchFocused(false), 200)} // Delay to allow clicks
+                onBlur={() => setTimeout(() => setSearchFocused(false), 200)}
                 className="glass-search-input"
               />
               {searchQuery && (
@@ -504,11 +581,12 @@ const Home = () => {
                           
                           {/* Bookmark simulation inside Featured */}
                           <button 
-                            className={`featured-bookmark-btn ${bookmarkedIds.includes(featuredArticle.id) ? 'active' : ''}`}
-                            onClick={(e) => handleToggleBookmark(featuredArticle.id, e)}
-                            title={bookmarkedIds.includes(featuredArticle.id) ? "Remove Saved" : "Save article"}
+                            className={`featured-bookmark-btn ${bookmarkedIds.includes(String(featuredArticle.id)) ? 'active' : ''} ${bookmarkAnimating[String(featuredArticle.id)] ? 'animate-pop' : ''} ${bookmarkLoading[String(featuredArticle.id)] ? 'loading' : ''}`}
+                            onClick={(e) => handleToggleBookmark(featuredArticle, e)}
+                            title={bookmarkedIds.includes(String(featuredArticle.id)) ? "Remove Bookmark" : "Save Article"}
+                            disabled={!!bookmarkLoading[String(featuredArticle.id)]}
                           >
-                            <Bookmark size={16} fill={bookmarkedIds.includes(featuredArticle.id) ? "currentColor" : "none"} />
+                            <Bookmark size={16} fill={bookmarkedIds.includes(String(featuredArticle.id)) ? "currentColor" : "none"} />
                           </button>
                         </div>
 
@@ -584,13 +662,14 @@ const Home = () => {
                               <span className="neon-source-badge">{article.news_site}</span>
                             )}
                             
-                            {/* Bookmark simulation icon toggle */}
+                            {/* Bookmark button */}
                             <button 
-                              className={`card-bookmark-btn ${bookmarkedIds.includes(article.id) ? 'active' : ''}`}
-                              onClick={(e) => handleToggleBookmark(article.id, e)}
-                              title={bookmarkedIds.includes(article.id) ? "Remove Saved" : "Save article"}
+                              className={`card-bookmark-btn ${bookmarkedIds.includes(String(article.id)) ? 'active' : ''} ${bookmarkAnimating[String(article.id)] ? 'animate-pop' : ''} ${bookmarkLoading[String(article.id)] ? 'loading' : ''}`}
+                              onClick={(e) => handleToggleBookmark(article, e)}
+                              title={bookmarkedIds.includes(String(article.id)) ? "Remove Bookmark" : "Save Article"}
+                              disabled={!!bookmarkLoading[String(article.id)]}
                             >
-                              <Bookmark size={15} fill={bookmarkedIds.includes(article.id) ? "currentColor" : "none"} />
+                              <Bookmark size={15} fill={bookmarkedIds.includes(String(article.id)) ? "currentColor" : "none"} />
                             </button>
                           </div>
 
@@ -642,10 +721,31 @@ const Home = () => {
             article={selectedArticle}
             isOpen={isModalOpen}
             onClose={handleCloseModal}
-            isBookmarked={bookmarkedIds.includes(selectedArticle.id)}
-            onToggleBookmark={(e) => handleToggleBookmark(selectedArticle.id, e)}
+            isBookmarked={bookmarkedIds.includes(String(selectedArticle.id || selectedArticle.articleId))}
+            onToggleBookmark={(e) => handleToggleBookmark(selectedArticle, e)}
             formatDate={formatDate}
           />
+        )}
+      </AnimatePresence>
+
+      {/* Toast feedback alerts */}
+      <AnimatePresence>
+        {toast && (
+          <motion.div 
+            className={`toast-alert-container toast-${toast.type}`}
+            initial={{ opacity: 0, y: 50, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 15, scale: 0.9 }}
+            transition={{ type: 'spring', damping: 20, stiffness: 200 }}
+          >
+            <div className="toast-content">
+              {toast.type === 'success' && <CheckCircle size={18} />}
+              {toast.type === 'info' && <AlertCircle size={18} />}
+              {toast.type === 'error' && <XCircle size={18} />}
+              <span className="toast-msg">{toast.message}</span>
+            </div>
+            <div className="toast-progress"></div>
+          </motion.div>
         )}
       </AnimatePresence>
 

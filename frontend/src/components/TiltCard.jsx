@@ -1,8 +1,8 @@
 import { useState, useRef } from 'react';
 
-const TiltCard = ({ children, className = '' }) => {
+const TiltCard = ({ children, className = '', onClick }) => {
   const cardRef = useRef(null);
-  const [coords, setCoords] = useState({ x: 0, y: 0 });
+  const [coords, setCoords] = useState({ x: 0, y: 0, dx: 0, dy: 0 });
   const [isHovering, setIsHovering] = useState(false);
 
   const handleMouseMove = (e) => {
@@ -57,17 +57,18 @@ const TiltCard = ({ children, className = '' }) => {
       onMouseMove={handleMouseMove}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
+      onClick={onClick}
       style={cardStyle}
       className={className}
     >
-      {/* Dynamic Glare Overlay */}
+      {/* Dynamic Glare Overlay — z-index 0 so it never blocks child buttons */}
       <div 
         className="card-glare-effect"
         style={{
           position: 'absolute',
           inset: 0,
           pointerEvents: 'none',
-          zIndex: 3,
+          zIndex: 0,
           borderRadius: 'inherit',
           transition: isHovering ? 'none' : 'background 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
           ...glareStyle

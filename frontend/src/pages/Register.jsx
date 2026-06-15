@@ -35,10 +35,16 @@ const Register = () => {
 
     try {
       // Send registration request to backend
-      await api.post('/auth/register', {
+      const response = await api.post('/auth/register', {
         email,
         password,
       });
+
+      // Backend returns { success, data: { _id, email, token } }
+      const token = response.data.data?.token || response.data.token;
+      if (token) {
+        localStorage.setItem('authToken', token);
+      }
 
       // Show success message
       setSuccess('Channel established! Relaying to access terminal...');

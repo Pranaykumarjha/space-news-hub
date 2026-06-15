@@ -30,8 +30,12 @@ const Login = () => {
         password,
       });
 
+      // Backend returns { success, data: { _id, email, token } }
+      const token = response.data.data?.token || response.data.token;
+      if (!token) throw new Error('No token received from server.');
+
       // Store auth token in localStorage
-      localStorage.setItem('authToken', response.data.token);
+      localStorage.setItem('authToken', token);
 
       // Redirect to home page on successful login
       navigate('/');

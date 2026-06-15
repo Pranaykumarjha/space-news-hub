@@ -3,6 +3,7 @@ import { AnimatePresence } from 'framer-motion';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Home from './pages/Home';
+import Bookmarks from './pages/Bookmarks';
 import './App.css';
 
 function AnimatedRoutes() {
@@ -16,6 +17,9 @@ function AnimatedRoutes() {
 
         {/* Register Route */}
         <Route path="/register" element={<Register />} />
+
+        {/* Bookmarks Route */}
+        <Route path="/bookmarks" element={<Bookmarks />} />
 
         {/* Home Route */}
         <Route path="/" element={<Home />} />
