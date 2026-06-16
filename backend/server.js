@@ -26,17 +26,31 @@ const app = express();
 // Connect to MongoDB Atlas
 connectDB();
 
+const LOCAL_DEV_ORIGIN = 'http://localhost:5173';
+
+/**
+ * Normalize origin URLs from FRONTEND_URL (strip trailing slashes).
+ */
+const normalizeOrigin = (url) => url.trim().replace(/\/+$/, '');
+
 /**
  * CORS configuration for development and production.
- * In production, only origins listed in FRONTEND_URL are allowed.
- * FRONTEND_URL supports comma-separated values for multiple deployments.
+ * Origins are read from FRONTEND_URL (comma-separated).
+ * Localhost is always allowed for development workflows.
  */
 const getAllowedOrigins = () => {
-  if (!process.env.FRONTEND_URL) {
-    return [];
+  const origins = new Set();
+
+  if (process.env.FRONTEND_URL) {
+    process.env.FRONTEND_URL.split(',')
+      .map(normalizeOrigin)
+      .filter(Boolean)
+      .forEach((url) => origins.add(url));
   }
 
-  return process.env.FRONTEND_URL.split(',').map((url) => url.trim()).filter(Boolean);
+  origins.add(LOCAL_DEV_ORIGIN);
+
+  return [...origins];
 };
 
 const corsOptions = {
@@ -46,24 +60,29 @@ const corsOptions = {
       return callback(null, true);
     }
 
+    const normalizedOrigin = normalizeOrigin(origin);
+    const allowedOrigins = getAllowedOrigins();
+
     // Allow all origins during local development
     if (process.env.NODE_ENV !== 'production') {
       return callback(null, true);
     }
 
-    const allowedOrigins = getAllowedOrigins();
-
-    if (allowedOrigins.includes(origin)) {
+    if (allowedOrigins.includes(normalizedOrigin)) {
       return callback(null, true);
     }
 
     callback(new Error(`Origin ${origin} is not allowed by CORS`));
   },
   credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  optionsSuccessStatus: 204,
 };
 
-// Core middleware
+// Core middleware — CORS must run before routes and body parsers
 app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
