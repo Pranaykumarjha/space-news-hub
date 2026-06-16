@@ -3,9 +3,17 @@
 
 import axios from 'axios';
 
+const baseURL = import.meta.env.VITE_API_URL;
+
+if (!baseURL) {
+  console.error(
+    'VITE_API_URL is not defined. Add it to .env.development or .env.production.'
+  );
+}
+
 // Create Axios instance with base URL pointing to the backend API
 const api = axios.create({
-  baseURL: 'http://localhost:5000/api',
+  baseURL,
   headers: {
     'Content-Type': 'application/json',
   },

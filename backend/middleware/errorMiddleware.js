@@ -6,6 +6,12 @@ const errorHandler = (err, req, res, next) => {
   let statusCode = res.statusCode === 200 ? 500 : res.statusCode;
   let message = err.message || 'Internal Server Error';
 
+  // CORS rejection
+  if (err.message && err.message.includes('not allowed by CORS')) {
+    statusCode = 403;
+    message = 'CORS policy: this origin is not allowed';
+  }
+
   // Mongoose duplicate key error (e.g. duplicate email)
   if (err.code === 11000) {
     statusCode = 400;
