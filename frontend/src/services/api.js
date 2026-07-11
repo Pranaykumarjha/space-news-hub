@@ -11,6 +11,21 @@ if (!baseURL) {
   );
 }
 
+const clearAuthSession = () => {
+  if (typeof window !== 'undefined') {
+    window.localStorage.removeItem('authToken');
+  }
+};
+
+const redirectToLogin = () => {
+  if (typeof window === 'undefined') return;
+
+  const pathname = window.location.pathname;
+  if (!pathname.startsWith('/login') && !pathname.startsWith('/register')) {
+    window.location.assign('/login');
+  }
+};
+
 // Create Axios instance with base URL pointing to the backend API
 const api = axios.create({
   baseURL,
@@ -34,7 +49,14 @@ api.interceptors.request.use(
 // Interceptor to handle responses
 api.interceptors.response.use(
   (response) => response,
-  (error) => Promise.reject(error)
+  (error) => {
+    if (error.response?.status === 401) {
+      clearAuthSession();
+      redirectToLogin();
+    }
+
+    return Promise.reject(error);
+  }
 );
 
 export default api;

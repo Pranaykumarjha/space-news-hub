@@ -15,6 +15,28 @@ const axios = require('axios');
 const SPACEFLIGHT_NEWS_API_URL = 'https://api.spaceflightnewsapi.net/v4/articles/';
 
 /**
+ * Removes known-bad or untrusted image URLs before sending them to clients.
+ * This avoids broken NASA image requests that currently 404 in production.
+ */
+const sanitizeImageUrl = (url) => {
+  if (!url || typeof url !== 'string') {
+    return '';
+  }
+
+  try {
+    const parsedUrl = new URL(url);
+
+    if (parsedUrl.hostname.includes('nasa.gov')) {
+      return '';
+    }
+
+    return url;
+  } catch {
+    return '';
+  }
+};
+
+/**
  * Fetches spaceflight news articles from the Spaceflight News API
  * 
  * @async
@@ -44,7 +66,7 @@ async function fetchSpaceflightNews(limit = 10) {
       id: article.id,
       title: article.title,
       summary: article.summary,
-      image_url: article.image_url,
+      image_url: sanitizeImageUrl(article.image_url),
       url: article.url,
       published_at: article.published_at,
       news_site: article.news_site,
