@@ -14,7 +14,7 @@ A modern full-stack MERN application that delivers real-time space news from tru
 ## 🌐 Live Demo
 
 🔗 **Live Application:**
-https://space-news-hub-ce86.vercel.app/
+https://space-news-hub-ce86-oeyoeu2mo-pranay-kumar-jhas-projects.vercel.app/
 
 ---
 
